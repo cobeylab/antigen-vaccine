@@ -507,8 +507,14 @@ public class Simulation {
 			ISqlJetTable table = sampleDb.getTable("nVaccinations");
 			for(int vaccineId = 0; vaccineId <= deployedVaccine; vaccineId++) {
 				for(int demeId =  0; demeId < demes.size(); demeId++) {
-					table.insert(getDate(), vaccineId, demeId, "S", demes.get(demeId).getNVaccinatedS(vaccineId));
-					table.insert(getDate(), vaccineId, demeId, "I", demes.get(demeId).getNVaccinatedI(vaccineId)); 
+					
+					if(params.vaccinateConstantFraction) {
+						table.insert(getDate(), vaccineId, demeId, "Recipient", demes.get(demeId).getNVaccineRecipients(vaccineId));
+					}
+					else {
+						table.insert(getDate(), vaccineId, demeId, "S", demes.get(demeId).getNVaccinatedS(vaccineId));
+						table.insert(getDate(), vaccineId, demeId, "I", demes.get(demeId).getNVaccinatedI(vaccineId)); 
+					}
 				}
 			}
 			sampleDb.commit();
@@ -581,8 +587,10 @@ public class Simulation {
 					tmrca = dist;
 				}
 				antigenicDiversity += vA.antigenicDistance(vB);
-				coalOpp += coalWindow;
-				coalCount += vA.coalescence(vB, coalWindow);
+				if ( params.getNetau ) {
+					coalOpp += coalWindow;
+					coalCount += vA.coalescence(vB, coalWindow);
+				}
 				serialInterval += vA.serialInterval();
 			}
 		}	
@@ -668,6 +676,7 @@ public class Simulation {
 				if(day % 365.0 == params.deployDay){
 					vaccineSeason = true;
 					vaccineSeasonEndDay = day + params.vaccineWindow;
+					hp.resetVaccinePool();
 					System.err.printf("start vaccine season\n");
 					System.err.printf("vaccine season ends on day %s\n",vaccineSeasonEndDay);
 				}

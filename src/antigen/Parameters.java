@@ -23,6 +23,7 @@ public class Parameters {
 	public Boolean reducedOutput;						// whether to output only out.summary and out.timeseries
 	public Double tmrcaLimit;
 	public Boolean printLongitudinal;
+	public Boolean getNetau; // whether to compute netau
 	
 	public Boolean[] startAtEquilibriumInfected;
 	public Boolean[] startAtEquilibriumImmune;
@@ -82,6 +83,8 @@ public class Parameters {
 	public Double vaccineWindow; //how many days the vaccine 'season' lasts
 	public Boolean varyVaccinationRate; // whether to vary vaccination rates over time
 	public Double[] allVaccinationRates; // list of vaccination rates to vary over
+	public Boolean vaccinateConstantFraction; // whether to vaccinate the same constant fraction of the population
+												// if true, then vaccinationRate is the fraction of the population that is vaccinated each year
 	
 	public Double sampleStep;
 	public Integer sampleHostsPerDeme;

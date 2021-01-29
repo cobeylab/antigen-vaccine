@@ -35,6 +35,7 @@ public class HostPopulation {
 
 	private List<Integer> nVaccinatedS;
 	private List<Integer> nVaccinatedI;
+	private List<Integer> nVaccineRecipients;
 	
 	public final int initialI;
 	public final int initialR;
@@ -42,6 +43,8 @@ public class HostPopulation {
 	public final int initialT;
 	
 	private Double currentVaccinationRate;
+	public List<Host> vaccineCandidates;
+	public List<Host> vaccineRecipients;
 
 	// construct population, using Virus v as initial infection
 	public HostPopulation(Simulation sim, Parameters params, Phenotype urImmunity, Virus urVirus, int d) {
@@ -128,10 +131,32 @@ public class HostPopulation {
 			infecteds.add(h);
 		}
 		
+		
+		// Pre-select vaccine recipients randomly from susceptibles and infecteds
+		if(params.vaccinate & params.vaccinateConstantFraction) {
+			vaccineCandidates = new ArrayList<Host>();
+			vaccineRecipients = new ArrayList<Host>();
+			
+			int nVaccineRecipientsS =  (int) (params.vaccinationRate[d] * susceptibles.size());
+			Set<Integer> vaccineRecipientIndicesS = chooseRandomIndices(susceptibles.size(), nVaccineRecipientsS); 
+			for(int index : vaccineRecipientIndicesS) {
+				vaccineCandidates.add(susceptibles.get(index));
+			}
+			int nVaccineRecipientsI =  (int) (params.vaccinationRate[d] * infecteds.size());
+			Set<Integer> vaccineRecipientIndicesI = chooseRandomIndices(infecteds.size(), nVaccineRecipientsI); 
+			for(int index : vaccineRecipientIndicesI) {
+				vaccineCandidates.add(infecteds.get(index));
+			}
+			
+
+
+		}
+		
 		currentPhenotypes = new ArrayList<Phenotype>();
 		
 		nVaccinatedS = new ArrayList<Integer>();
 		nVaccinatedI = new ArrayList<Integer>();
+		nVaccineRecipients = new ArrayList<Integer>();
 	}
 	
 	// accessors
@@ -354,7 +379,7 @@ public class HostPopulation {
 			if (getS()>0) {
 				int index = getRandomS();
 				Host h = susceptibles.get(index);
-				if(params.vaccinate) {
+				if(params.vaccinate & !params.vaccinateConstantFraction) {
 					for(int vaccineId : h.getVaccinationHistoryIdSet(sim)) {
 						nVaccinatedS.set(vaccineId, nVaccinatedS.get(vaccineId) - 1);
 					}
@@ -370,7 +395,7 @@ public class HostPopulation {
 			if (getI()>0) {
 				int index = getRandomI();
 				Host h = infecteds.get(index);
-				if(params.vaccinate) {
+				if(params.vaccinate & !params.vaccinateConstantFraction) {
 					for(int vaccineId : h.getVaccinationHistoryIdSet(sim)) {
 						nVaccinatedI.set(vaccineId, nVaccinatedI.get(vaccineId) - 1);
 					}
@@ -499,14 +524,73 @@ public class HostPopulation {
 		System.err.println("Updating rate :" + currentVaccinationRate);
 	}
 	
+	
+	public void resetVaccinePool() {
+		//System.err.printf("Resetting vaccine candidate pool");
+				
+		for(int i = 1; i < vaccineRecipients.size(); i++) {
+			Host vH = vaccineRecipients.get(i);
+			vaccineCandidates.add(vH);
+		}
+		
+		vaccineRecipients = new ArrayList<Host>();
+		//System.err.printf("Vaccine recipients size: %d\n",vaccineRecipients.size());
+		//System.err.printf("Vaccine canndidates size: %d\n",vaccineCandidates.size());
+
+
+	}
+	
+	
+
+	private void vaccinateConstantFraction(int vaccineId, List<Host> candidates, List<Host> recipients, List<Integer> counts) {
+		if(candidates.size() == 0) {
+			return;
+		}
+		int vacCount = Math.min(candidates.size(), 
+				Random.nextPoisson((candidates.size() + recipients.size()) * params.deltaT / params.vaccineWindow));
+
+		//System.err.printf("Vaccination count: %d\n", vacCount);
+		
+		for (int i = 0; i < vacCount; i++) {
+			if (candidates.size() > 0) {
+		
+				// get indices and objects				
+				int cndex = Random.nextInt(0,candidates.size()-1);
+				Host vH = candidates.get(cndex);
+				vH.vaccinate(vaccineId, sim.getDate());
+				
+				int lastIndex = candidates.size() - 1;
+				Host lastHost = candidates.get(lastIndex);
+				candidates.set(cndex,lastHost);
+				candidates.remove(lastIndex);
+				recipients.add(vH);
+
+			}
+		}
+		
+		// System.err.printf("hosts in candidate pool: %d\n", candidates.size());
+		// System.err.printf("hosts in vaccinated pool: %d\n", recipients.size());
+		
+		if(vaccineId == counts.size()) {
+			counts.add(vacCount);	
+		}
+		else if(vaccineId == counts.size() - 1) {
+			counts.set(vaccineId, counts.get(vaccineId) + vacCount);
+		}
+		else {
+			assert false;
+		}
+		
+	}
+	
 	private void vaccinate(int vaccineId, List<Host> hosts, List<Integer> counts, double vaccinationRate) {
 		if(hosts.size() == 0) {
 			return;
 		}
 		
-//		System.err.printf("Vaccination rate: %f\n", vaccinationRate);
+		//System.err.printf("Vaccination rate: %f\n", vaccinationRate);
 		int vacCount = Math.min(hosts.size(), Random.nextPoisson(hosts.size() * vaccinationRate));
-//		System.err.printf("Vaccination count: %d\n", vacCount);
+		//System.err.printf("Vaccination count: %d\n", vacCount);
 		Set<Integer> vacIndices = chooseRandomIndices(hosts.size(), vacCount); 
 		for(int index : vacIndices) {
 			hosts.get(index).vaccinate(vaccineId, sim.getDate());
@@ -524,13 +608,20 @@ public class HostPopulation {
 	
 	// vaccinate a Poisson-distributed number of hosts (in all states)
 	public void vaccinate(int vaccineId) {
-		double vaccinationRate = currentVaccinationRate * params.deltaT * 365.0 / params.vaccineWindow;
-		if(params.varyVaccinationRate){
-			vaccinationRate = currentVaccinationRate * params.deltaT * 365.0/ params.vaccineWindow;
+		double vaccinationRate;
+		if(!params.vaccinateConstantFraction) {
+			vaccinationRate = currentVaccinationRate * params.deltaT * 365.0 / params.vaccineWindow;
+			if(params.varyVaccinationRate){
+				vaccinationRate = currentVaccinationRate * params.deltaT * 365.0/ params.vaccineWindow;
+			}
+			vaccinate(vaccineId, susceptibles, nVaccinatedS, vaccinationRate);
+			vaccinate(vaccineId, infecteds, nVaccinatedI, vaccinationRate);
+		}
+		else {
+			vaccinateConstantFraction(vaccineId, vaccineCandidates, vaccineRecipients, nVaccineRecipients);
 		}
 		
-		vaccinate(vaccineId, susceptibles, nVaccinatedS, vaccinationRate);
-		vaccinate(vaccineId, infecteds, nVaccinatedI, vaccinationRate);
+
 	}
 	
 	// draw a Poisson distributed number of contacts
@@ -569,7 +660,7 @@ public class HostPopulation {
 				if (Random.nextBoolean(chanceOfSuccess)) {
 					sH.infect(sim.getDate(), v,deme);
 					
-					if(params.vaccinate) {
+					if(params.vaccinate & !params.vaccinateConstantFraction) {
 						for(int vaccineId : sH.getVaccinationHistoryIdSet(sim)) {
 							nVaccinatedS.set(vaccineId, nVaccinatedS.get(vaccineId) - 1);
 							nVaccinatedI.set(vaccineId, nVaccinatedI.get(vaccineId) + 1);
@@ -621,7 +712,7 @@ public class HostPopulation {
 				);
 				if (Random.nextBoolean(chanceOfSuccess)) {
 					sH.infect(sim.getDate(), v,deme);
-					if(params.vaccinate){
+					if(params.vaccinate & !params.vaccinateConstantFraction){
 						for(int vaccineId : sH.getVaccinationHistoryIdSet(sim)) {
 							nVaccinatedS.set(vaccineId, nVaccinatedS.get(vaccineId) - 1);
 							nVaccinatedI.set(vaccineId, nVaccinatedI.get(vaccineId) + 1);
@@ -660,7 +751,7 @@ public class HostPopulation {
 					susceptibles.add(h);
 				}
 				
-				if(params.vaccinate) {
+				if(params.vaccinate & !params.vaccinateConstantFraction) {
 					for(int vaccineId : h.getVaccinationHistoryIdSet(sim)) {
 						nVaccinatedI.set(vaccineId, nVaccinatedI.get(vaccineId) - 1);
 						nVaccinatedS.set(vaccineId, nVaccinatedS.get(vaccineId) + 1);
@@ -968,10 +1059,22 @@ public class HostPopulation {
 	
 	public int getNVaccinatedS(int vaccineId) {
 		return nVaccinatedS.get(vaccineId);
+		
 	}
 	
 	public int getNVaccinatedI(int vaccineId) {
 		return nVaccinatedI.get(vaccineId);
+	}
+	
+	public int getNVaccineRecipients(int vaccineId) {
+		if(nVaccineRecipients.size() > vaccineId){
+			return nVaccineRecipients.get(vaccineId);
+
+		}
+		else {
+			System.err.println("No new vaccinees yet");
+			return 0;
+		}
 	}
 				
 }
