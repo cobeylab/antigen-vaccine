@@ -38,9 +38,10 @@ public class HostPopulation {
 	private List<Integer> nVaccineRecipients;
 	
 	public final int initialI;
-	public final int initialR;
+	public int initialR;
 	public final int initialS;
 	public final int initialT;
+	public int initialV;
 	
 	private Double currentVaccinationRate;
 	public List<Host> vaccineCandidates;
@@ -90,7 +91,6 @@ public class HostPopulation {
 		else {
 			initialR = (int)Math.round(params.initialPrR * params.initialNs[d]);
 		}
-		System.err.printf("initial R: %d\n", initialR);
 		
 		assert initialI + initialR <= params.initialNs[d];
 		initialS = params.initialNs[d] - initialI - initialR; 
@@ -111,6 +111,29 @@ public class HostPopulation {
 			susceptibles.add(h);
 		}
 		
+		// Initialize infected individuals
+		infecteds = new ArrayList<Host>(initialI * 10);
+		for (int i = 0; i < initialI; i++) {
+			Virus v = new Virus(0.0, urVirus, deme);
+			Host h = new Host(v, params.vaccinate, sim.getDate());
+			infecteds.add(h);
+		}
+		
+		
+		// Initialize immune and vaccine compartments 
+		// When vaccinating a constant fraction of the population,
+		// the vaccine candidate sub-population is chosen from the initial immune compartment
+		// (i.e., susceptibles that have immunity to the initial strain)
+		// Note that this assumes initialV <= initialR
+		if(params.vaccinate & params.vaccinateConstantFraction) {
+			initialV = (int)Math.round(params.initialNs[d] * params.vaccinationRate[d]);
+
+			initialR = initialR - initialV;
+		}
+		System.err.printf("initial R: %d\n", initialR);
+		System.err.printf("initial V: %d\n", initialV);
+
+		
 		// Initialize immune (or transcendental) individuals
 		transcendentals = new ArrayList<Host>(initialT * 10);
 		for(int i = 0; i < initialR; i++) {
@@ -122,41 +145,38 @@ public class HostPopulation {
 				susceptibles.add(h);
 			}
 		}
-
-		// Initialize infected individuals
-		infecteds = new ArrayList<Host>(initialI * 10);
-		for (int i = 0; i < initialI; i++) {
-			Virus v = new Virus(0.0, urVirus, deme);
-			Host h = new Host(v, params.vaccinate, sim.getDate());
-			infecteds.add(h);
-		}
 		
-		
-		// Pre-select vaccine recipients randomly from susceptibles and infecteds
+		// If vaccinating a constant fraction of the population,
+		// pre-select vaccine recipients randomly from susceptibles and infecteds
 		if(params.vaccinate & params.vaccinateConstantFraction) {
 			vaccineCandidates = new ArrayList<Host>();
 			vaccineRecipients = new ArrayList<Host>();
 			
-			int nVaccineRecipientsS =  (int) (params.vaccinationRate[d] * susceptibles.size());
-			Set<Integer> vaccineRecipientIndicesS = chooseRandomIndices(susceptibles.size(), nVaccineRecipientsS); 
-			for(int index : vaccineRecipientIndicesS) {
-				vaccineCandidates.add(susceptibles.get(index));
-			}
-			int nVaccineRecipientsI =  (int) (params.vaccinationRate[d] * infecteds.size());
-			Set<Integer> vaccineRecipientIndicesI = chooseRandomIndices(infecteds.size(), nVaccineRecipientsI); 
-			for(int index : vaccineRecipientIndicesI) {
-				vaccineCandidates.add(infecteds.get(index));
+			for(int i =0; i<initialV; i++) {
+				Host h = new Host(urImmunity, params.vaccinate);
+				susceptibles.add(h);
+				vaccineCandidates.add(h);
 			}
 			
-
-
+//			int nVaccineRecipientsS =  (int) (params.vaccinationRate[d] * susceptibles.size());
+//			Set<Integer> vaccineRecipientIndicesS = chooseRandomIndices(susceptibles.size(), nVaccineRecipientsS); 
+//			for(int index : vaccineRecipientIndicesS) {
+//				vaccineCandidates.add(susceptibles.get(index));
+//			}
+//			int nVaccineRecipientsI =  (int) (params.vaccinationRate[d] * infecteds.size());
+//			Set<Integer> vaccineRecipientIndicesI = chooseRandomIndices(infecteds.size(), nVaccineRecipientsI); 
+//			for(int index : vaccineRecipientIndicesI) {
+//				vaccineCandidates.add(infecteds.get(index));
+//			}
+			
 		}
-		
-		currentPhenotypes = new ArrayList<Phenotype>();
-		
 		nVaccinatedS = new ArrayList<Integer>();
 		nVaccinatedI = new ArrayList<Integer>();
 		nVaccineRecipients = new ArrayList<Integer>();
+		
+		currentPhenotypes = new ArrayList<Phenotype>();
+		
+
 	}
 	
 	// accessors
