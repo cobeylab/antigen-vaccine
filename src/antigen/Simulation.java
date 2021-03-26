@@ -378,6 +378,7 @@ public class Simulation {
 			File hostFile = new File("out.long");
 			hostFile.delete();
 			hostFile.createNewFile();
+			System.err.println("printing longitudinal data");
 			PrintStream longStream = new PrintStream(hostFile);
 			for (int i = 0; i < params.demeCount; i++) {
 				HostPopulation hp = demes.get(i);

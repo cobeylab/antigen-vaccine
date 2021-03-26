@@ -122,13 +122,10 @@ public class HostPopulation {
 		
 		// Initialize immune and vaccine compartments 
 		// When vaccinating a constant fraction of the population,
-		// the vaccine candidate sub-population is chosen from the initial immune compartment
+		// the vaccine candidate sub-population is first chosen from the initial immune compartment
 		// (i.e., susceptibles that have immunity to the initial strain)
-		// Note that this assumes initialV <= initialR
 		if(params.vaccinate & params.vaccinateConstantFraction) {
 			initialV = (int)Math.round(params.initialNs[d] * params.vaccinationRate[d]);
-
-			initialR = initialR - initialV;
 		}
 		System.err.printf("initial R: %d\n", initialR);
 		System.err.printf("initial V: %d\n", initialV);
@@ -136,25 +133,51 @@ public class HostPopulation {
 		
 		// Initialize immune (or transcendental) individuals
 		transcendentals = new ArrayList<Host>(initialT * 10);
-		for(int i = 0; i < initialR; i++) {
-			Host h = new Host(urImmunity, params.vaccinate);
-			if (params.transcendental) {
-				transcendentals.add(h);
-			}
-			else {
-				susceptibles.add(h);
+		if(!params.vaccinateConstantFraction) {
+			for(int i = 0; i < initialR; i++) {
+				Host h = new Host(urImmunity, params.vaccinate);
+				if (params.transcendental) {
+					transcendentals.add(h);
+				}
+				else {
+					susceptibles.add(h);
+				}
 			}
 		}
 		
 		// If vaccinating a constant fraction of the population,
 		// pre-select vaccine recipients randomly from susceptibles and infecteds
+		// Note that vaccine recipients are also part of the initial immune hosts
 		if(params.vaccinate & params.vaccinateConstantFraction) {
 			vaccineCandidates = new ArrayList<Host>();
 			vaccineRecipients = new ArrayList<Host>();
 			
-			for(int i =0; i<initialV; i++) {
+			int initialR_notV = Math.max(0, initialR - initialV);
+			int initialR_V = Math.min(initialV, initialR);
+			int initialS_V = Math.max(0, initialV - initialR);
+			
+			System.err.printf("Initial recovered, not vaccinated: %d\n", initialR_notV);
+			System.err.printf("Initial recovered, vaccinated: %d\n", initialR_V);
+			System.err.printf("Initial susceptible, vaccinated: %d\n", initialS_V);
+			
+			for(int i = 0; i < initialR_notV; i++) {
+				Host h = new Host(urImmunity, params.vaccinate);
+				if (params.transcendental) {
+					transcendentals.add(h);
+				}
+				else {
+					susceptibles.add(h);
+				}
+			}
+
+			for(int i =0; i<initialR_V; i++) {
 				Host h = new Host(urImmunity, params.vaccinate);
 				susceptibles.add(h);
+				vaccineCandidates.add(h);
+			}
+			
+			for(int i =0; i< initialS_V; i++) {
+				Host h = getRandomHostS();
 				vaccineCandidates.add(h);
 			}
 			
@@ -965,7 +988,9 @@ public class HostPopulation {
 		double sampleRateS = 0.05;
 		double sampleRateI = 0.05;
 		Set<Integer> sampleIndices = chooseRandomIndices(susceptibles.size(), (int) Math.round(susceptibles.size()*sampleRateS));
-
+		
+		// System.err.println(susceptibles.size());
+		
 		// step through susceptibles and print
 		for (int index : sampleIndices) {
 			Host h = susceptibles.get(index);
