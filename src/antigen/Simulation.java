@@ -677,7 +677,10 @@ public class Simulation {
 				if(day % 365.0 == params.deployDay){
 					vaccineSeason = true;
 					vaccineSeasonEndDay = day + params.vaccineWindow;
-					hp.resetVaccinePool();
+					//hp.resetVaccinePool();
+					if(day>params.deployDay + params.vaccineWindow) {
+						hp.updateVaccinePool();
+					}
 					System.err.printf("start vaccine season\n");
 					System.err.printf("vaccine season ends on day %s\n",vaccineSeasonEndDay);
 				}

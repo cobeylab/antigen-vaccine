@@ -83,8 +83,9 @@ public class Parameters {
 	public Double vaccineWindow; //how many days the vaccine 'season' lasts
 	public Boolean varyVaccinationRate; // whether to vary vaccination rates over time
 	public Double[] allVaccinationRates; // list of vaccination rates to vary over
-	public Boolean vaccinateConstantFraction; // whether to vaccinate the same constant fraction of the population
-												// if true, then vaccinationRate is the fraction of the population that is vaccinated each year
+	public Boolean vaccinateConstantFraction; // whether to vaccinate the same constant fraction of the population; if true, then vaccinationRate is the fraction of the population that is vaccinated each year
+	public Double fractionRepeatVaccinations; // fraction of vaccines given to hosts in the candidate pool
+	public Double fractionNeverVaccinated; //fraction of hosts who will never get vaccinated
 	
 	public Double sampleStep;
 	public Integer sampleHostsPerDeme;

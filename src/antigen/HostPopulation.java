@@ -2,6 +2,7 @@ package antigen;
 /* A population of host individuals */
 
 import java.util.*;
+import java.util.concurrent.ThreadLocalRandom;
 import java.io.*;
 
 import org.tmatesoft.sqljet.core.SqlJetException;
@@ -46,6 +47,7 @@ public class HostPopulation {
 	private Double currentVaccinationRate;
 	public List<Host> vaccineCandidates;
 	public List<Host> vaccineRecipients;
+	public List<Host> otherVaccineCandidates;
 
 	// construct population, using Virus v as initial infection
 	public HostPopulation(Simulation sim, Parameters params, Phenotype urImmunity, Virus urVirus, int d) {
@@ -151,14 +153,22 @@ public class HostPopulation {
 		if(params.vaccinate & params.vaccinateConstantFraction) {
 			vaccineCandidates = new ArrayList<Host>();
 			vaccineRecipients = new ArrayList<Host>();
+			otherVaccineCandidates = new ArrayList<Host>();
 			
 			int initialR_notV = Math.max(0, initialR - initialV);
 			int initialR_V = Math.min(initialV, initialR);
 			int initialS_V = Math.max(0, initialV - initialR);
 			
+			int totalVaccineCandidates = (int) Math.round((1-params.fractionNeverVaccinated) * params.initialNs[d]);
+			int nOtherVaccineCandidates = totalVaccineCandidates - initialV;
+			int nOtherCandidateCounter = 0;
+			
+			System.err.printf("Other vaccine candidates: %d\n",nOtherVaccineCandidates);
+			
 			System.err.printf("Initial recovered, not vaccinated: %d\n", initialR_notV);
 			System.err.printf("Initial recovered, vaccinated: %d\n", initialR_V);
 			System.err.printf("Initial susceptible, vaccinated: %d\n", initialS_V);
+			
 			
 			for(int i = 0; i < initialR_notV; i++) {
 				Host h = new Host(urImmunity, params.vaccinate);
@@ -167,7 +177,21 @@ public class HostPopulation {
 				}
 				else {
 					susceptibles.add(h);
+					if(nOtherCandidateCounter < nOtherVaccineCandidates) {
+						otherVaccineCandidates.add(h);
+						nOtherCandidateCounter++;
+					}
 				}
+			}
+			
+			for(int i=0; i< initialS_V; i++) {
+				Host h = susceptibles.get(i);
+				vaccineCandidates.add(h);
+			}
+			
+			for(int i=initialS_V; i < (nOtherVaccineCandidates - nOtherCandidateCounter + initialS_V); i++) {
+				Host h =susceptibles.get(i);
+				otherVaccineCandidates.add(h);
 			}
 
 			for(int i =0; i<initialR_V; i++) {
@@ -176,10 +200,12 @@ public class HostPopulation {
 				vaccineCandidates.add(h);
 			}
 			
-			for(int i =0; i< initialS_V; i++) {
-				Host h = getRandomHostS();
-				vaccineCandidates.add(h);
-			}
+			
+			
+			System.err.println(vaccineCandidates.size());	
+			System.err.println(otherVaccineCandidates.size());	
+
+
 			
 //			int nVaccineRecipientsS =  (int) (params.vaccinationRate[d] * susceptibles.size());
 //			Set<Integer> vaccineRecipientIndicesS = chooseRandomIndices(susceptibles.size(), nVaccineRecipientsS); 
@@ -476,6 +502,19 @@ public class HostPopulation {
 		return indices;
 	}
 	
+	public List<Integer> chooseRandomIndicesArray(int size, int count) {
+		assert(count <= size);
+		List<Integer> indices = new ArrayList<Integer>();
+		for(int i = 0; i < count; i++) {
+			int index;
+			do {
+				index = Random.nextInt(0, size - 1);
+			} while(indices.contains(index));
+			indices.add(index);
+		}
+		return indices;
+	}
+	
 	public double getFrequency(Phenotype p, List<Phenotype> pList){
 		double pCounts = (double) Collections.frequency(pList, p);
 		return (pCounts / pList.size());
@@ -567,6 +606,71 @@ public class HostPopulation {
 		System.err.println("Updating rate :" + currentVaccinationRate);
 	}
 	
+	public static <E> List<E> pickNRandomElements(List<E> list, int n) {
+	    int length = list.size();
+
+	    if (length < n) return null;
+
+	    //We don't need to shuffle the whole list
+	    for (int i = length - 1; i >= length - n; --i)
+	    {
+	        Collections.swap(list, i , Random.nextInt(0, i + 1));
+	    }
+	    return list.subList(length - n, length);
+	}
+
+//	public static <E> List<E> pickNRandomElements(List<E> list, int n) {
+//	    return pickNRandomElements(list, n, ThreadLocalRandom.current());
+//	}
+	
+	public void updateVaccinePool() {
+		System.err.println("Updating vaccine candidate pool");
+		
+		int newVaccinationCount = (int) (Math.round(initialV * (1-params.fractionRepeatVaccinations)));		
+		//List<Integer> removeFromRecipientsIndices = chooseRandomIndicesArray(vaccineRecipients.size(), newVaccinationCount);
+		//List<Integer> addFromOtherCandidatesIndices = chooseRandomIndicesArray(otherVaccineCandidates.size(), newVaccinationCount);
+		
+		
+		List<Host> keepRecipients = pickNRandomElements(vaccineRecipients, initialV-newVaccinationCount);
+		List<Host> addFromOtherCandidates = pickNRandomElements(otherVaccineCandidates, newVaccinationCount);
+
+		
+		System.err.println("done choosing random hosts");
+//		for(int i = 0; i<newVaccinationCount; i++) {			
+//			int removeFromRecipientsIndex = removeFromRecipientsIndices.get(i);
+//			int addFromOtherCandidatesIndex = addFromOtherCandidatesIndices.get(i);
+//
+//			
+//			Host vH = vaccineRecipients.get(removeFromRecipientsIndex);
+//			Host cH = otherVaccineCandidates.get(addFromOtherCandidatesIndex);
+//
+//			otherVaccineCandidates.set(addFromOtherCandidatesIndex, vH);
+//			vaccineRecipients.set(removeFromRecipientsIndex, cH);
+//			
+//		}
+		
+		System.err.printf("Swapped %d hosts\n", newVaccinationCount);
+		System.err.printf("Recipients kept %d\n", keepRecipients.size());
+		System.err.printf("Other candidates added %d\n",addFromOtherCandidates.size());
+		
+		vaccineCandidates = new ArrayList<Host>();
+
+		System.err.println("moving all recipients to candidates for next season");
+		for(int i = 0; i < keepRecipients.size(); i++) {
+			Host vH = vaccineRecipients.get(i);
+			vaccineCandidates.add(vH);
+		}
+		for(int i = 0; i < addFromOtherCandidates.size(); i++) {
+			Host vH = addFromOtherCandidates.get(i);
+			vaccineCandidates.add(vH);
+		}
+		
+		vaccineRecipients = new ArrayList<Host>();
+		//System.err.printf("Vaccine recipients size: %d\n",vaccineRecipients.size());
+		System.err.printf("Vaccine candidates size: %d\n",vaccineCandidates.size());
+
+
+	}
 	
 	public void resetVaccinePool() {
 		//System.err.printf("Resetting vaccine candidate pool");
